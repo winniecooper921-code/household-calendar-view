@@ -5,7 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Household Calendar</title>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
+/* Ensure [hidden] always hides, even when other rules set display */
+[hidden] { display: none !important; }
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     background: #f5f5f7;
@@ -13,27 +17,28 @@ body {
     min-height: 100vh;
 }
 
-/* --- Lock screen --- */
+/* --- Lock screen (full viewport modal until decrypted) --- */
 .lock-screen {
-    min-height: 100vh;
+    position: fixed;
+    inset: 0;
+    background: rgba(245, 245, 247, 0.96);
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 1rem;
+    z-index: 100;
 }
 .lock-card {
     background: #fff;
     padding: 2rem;
     border-radius: 12px;
     border: 1px solid #e0e0e0;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.08);
     max-width: 360px;
     width: 100%;
     text-align: center;
 }
-.lock-card h1 {
-    font-size: 1.25rem;
-    margin-bottom: 1.25rem;
-}
+.lock-card h1 { font-size: 1.25rem; margin-bottom: 1.25rem; }
 .lock-card input {
     width: 100%;
     padding: 0.6rem 0.75rem;
@@ -43,10 +48,7 @@ body {
     margin-bottom: 0.75rem;
     font-family: inherit;
 }
-.lock-card input:focus {
-    outline: none;
-    border-color: #0071e3;
-}
+.lock-card input:focus { outline: none; border-color: #0071e3; }
 .lock-card button {
     width: 100%;
     padding: 0.65rem;
@@ -59,6 +61,7 @@ body {
     cursor: pointer;
 }
 .lock-card button:hover { background: #0060c0; }
+.lock-card button:disabled { opacity: 0.6; cursor: wait; }
 .lock-card .error {
     color: #c0392b;
     font-size: 0.9rem;
@@ -66,7 +69,7 @@ body {
     min-height: 1.2em;
 }
 
-/* --- Calendar --- */
+/* --- Header --- */
 header {
     background: #fff;
     border-bottom: 1px solid #e0e0e0;
@@ -78,9 +81,29 @@ header {
     flex-wrap: wrap;
 }
 header h1 { font-size: 1.1rem; font-weight: 600; }
-.generated {
-    font-size: 0.75rem;
-    color: #888;
+.generated { font-size: 0.75rem; color: #888; }
+
+.view-toggle {
+    display: inline-flex;
+    background: #f0f0f0;
+    border-radius: 8px;
+    padding: 2px;
+}
+.view-toggle button {
+    background: none;
+    border: none;
+    padding: 0.35rem 0.9rem;
+    font-size: 0.85rem;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #555;
+    font-family: inherit;
+}
+.view-toggle button.active {
+    background: #fff;
+    color: #0071e3;
+    font-weight: 500;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
 }
 
 main { padding: 1rem; }
@@ -89,19 +112,17 @@ main { padding: 1rem; }
     background: #fff;
     border-radius: 12px;
     border: 1px solid #e0e0e0;
-    padding: 1rem;
+    padding: 1.25rem;
 }
 
+/* --- Nav --- */
 .cal-nav {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
 }
-.cal-nav h2 {
-    font-size: 1rem;
-    font-weight: 600;
-}
+.cal-nav h2 { font-size: 1rem; font-weight: 600; }
 .cal-arrow {
     background: none;
     border: none;
@@ -110,27 +131,57 @@ main { padding: 1rem; }
     cursor: pointer;
     padding: 0.2rem 0.7rem;
     border-radius: 6px;
+    font-family: inherit;
 }
 .cal-arrow:hover { background: #f0f0f0; color: #0071e3; }
 
+/* --- Grid view --- */
+.cal-weekdays-wrap {
+    display: flex;
+    margin-bottom: 0.35rem;
+}
+.cal-label-spacer { width: 2.25rem; flex-shrink: 0; }
 .cal-weekdays {
+    flex: 1;
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     text-align: center;
-    font-size: 0.7rem;
+    font-size: 0.72rem;
     font-weight: 600;
     color: #888;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    margin-bottom: 0.35rem;
 }
+
+.cal-month-section {
+    display: flex;
+    align-items: stretch;
+}
+.cal-month-label {
+    width: 2.25rem;
+    flex-shrink: 0;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+.cal-month-section.alt .cal-month-label { color: #3a547a; }
+
+.cal-weeks { flex: 1; min-width: 0; }
 
 .cal-row {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: 3px;
     margin-bottom: 3px;
-    min-height: 5rem;
+    min-height: 5.5rem;
 }
 
 .cal-day {
@@ -140,10 +191,9 @@ main { padding: 1rem; }
     padding: 0.35rem 0.4rem;
     overflow: hidden;
 }
-.cal-day.cal-today {
-    background: #eef4ff;
-    border-color: #0071e3;
-}
+.cal-day-alt { background: #dbe4f0; }
+.cal-day.cal-today { background: #eef4ff; border-color: #0071e3; }
+
 .day-number {
     display: block;
     font-size: 0.75rem;
@@ -168,24 +218,68 @@ main { padding: 1rem; }
 .cal-event.yellow { background: #fef9c3; color: #78350f; border-left-color: #d97706; }
 .cal-event.cont { opacity: 0.7; border-left-style: dashed; }
 
+/* --- List view --- */
+.list-empty {
+    text-align: center;
+    color: #888;
+    font-size: 0.9rem;
+    padding: 2rem;
+}
+.list-date-header {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #555;
+    padding: 0.75rem 0 0.4rem;
+    border-bottom: 1px solid #e8e8e8;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.list-date-header.today {
+    color: #0071e3;
+    border-bottom-color: #0071e3;
+}
+.list-item {
+    padding: 0.6rem 0.85rem;
+    background: #ddeeff;
+    color: #003a75;
+    border-left: 3px solid #0071e3;
+    border-radius: 6px;
+    margin-bottom: 0.4rem;
+    font-size: 0.9rem;
+}
+.list-item.purple { background: #f0e6ff; color: #4c1d95; border-left-color: #7c3aed; }
+.list-item.yellow { background: #fef9c3; color: #78350f; border-left-color: #d97706; }
+.list-item-title { font-weight: 500; }
+.list-item-range, .list-item-notes {
+    font-size: 0.78rem;
+    margin-top: 0.2rem;
+    opacity: 0.8;
+}
+
 /* Mobile tweaks */
 @media (max-width: 600px) {
+    header { padding: 0.6rem 1rem; }
+    header h1 { font-size: 1rem; }
+    .generated { width: 100%; order: 3; }
     .cal-day { padding: 0.2rem; }
     .day-number { font-size: 0.7rem; }
     .cal-event { font-size: 0.65rem; padding: 0.1rem 0.25rem; }
     .cal-row { min-height: 4rem; }
+    .cal-label-spacer, .cal-month-label { width: 1.75rem; }
+    .cal-month-label { font-size: 0.7rem; }
 }
 </style>
 </head>
 <body>
 
-<!-- Password prompt -->
+<!-- Password prompt (full-screen modal, removed from DOM flow when unlocked) -->
 <div id="lock-screen" class="lock-screen">
     <form id="unlock-form" class="lock-card">
         <h1>Household Calendar</h1>
         <input type="password" id="password-input" placeholder="Password"
                autocomplete="current-password" autofocus>
-        <button type="submit">View Calendar</button>
+        <button id="unlock-btn" type="submit">View Calendar</button>
         <p id="error-msg" class="error"></p>
     </form>
 </div>
@@ -194,29 +288,53 @@ main { padding: 1rem; }
 <div id="calendar" hidden>
     <header>
         <h1>Household Calendar</h1>
+        <div class="view-toggle" role="tablist">
+            <button type="button" id="view-grid-btn" class="active" data-view="grid">Grid</button>
+            <button type="button" id="view-list-btn" data-view="list">List</button>
+        </div>
         <span id="generated" class="generated"></span>
     </header>
+
     <main>
         <div class="card">
             <div class="cal-nav">
                 <button id="prev-btn" class="cal-arrow" aria-label="Previous month">&#8592;</button>
-                <h2 id="month-heading"></h2>
+                <h2 id="anchor-label"></h2>
                 <button id="next-btn" class="cal-arrow" aria-label="Next month">&#8594;</button>
             </div>
-            <div class="cal-weekdays">
-                <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div>
-                <div>Thu</div><div>Fri</div><div>Sat</div>
+
+            <!-- Grid view -->
+            <div id="grid-view">
+                <div class="cal-weekdays-wrap">
+                    <div class="cal-label-spacer"></div>
+                    <div class="cal-weekdays">
+                        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div>
+                        <div>Thu</div><div>Fri</div><div>Sat</div>
+                    </div>
+                </div>
+                <div id="grid-sections"></div>
             </div>
-            <div id="grid"></div>
+
+            <!-- List view -->
+            <div id="list-view" hidden>
+                <div id="list-items"></div>
+            </div>
         </div>
     </main>
 </div>
 
 <script>
-const ENCRYPTED_BLOB = {"salt": "A5Bbvh8okofW2t4U977frA==", "iv": "lniv1sLgQO0vhHhT", "ciphertext": "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", "iterations": 250000};
-const STORAGE_KEY = "hc_password_v1";
+const ENCRYPTED_BLOB = {"salt": "gREtGBqYf6r2XHSgRh/lng==", "iv": "wQKV6ociN/AaAwjy", "ciphertext": "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", "iterations": 250000};
+const PW_KEY   = "hc_password_v1";
+const VIEW_KEY = "hc_view_v1";
+
+const MONTH_NAMES = ["January","February","March","April","May","June",
+                     "July","August","September","October","November","December"];
+const WEEKDAY_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
 const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+
+// --- Crypto ---
 
 async function deriveKey(password, salt, iterations) {
     const km = await crypto.subtle.importKey(
@@ -258,10 +376,7 @@ function fmtISO(d) {
     return `${y}-${m}-${day}`;
 }
 
-const MONTH_NAMES = ["January","February","March","April","May","June",
-                     "July","August","September","October","November","December"];
-
-function buildWeeks(year, month) {
+function buildWeeksForMonth(year, month) {
     const first = new Date(year, month, 1);
     const start = new Date(first);
     start.setDate(first.getDate() - first.getDay()); // back to Sunday
@@ -271,17 +386,78 @@ function buildWeeks(year, month) {
     end.setDate(last.getDate() + (6 - last.getDay())); // forward to Saturday
 
     const weeks = [];
-    let week = [];
     const cur = new Date(start);
     while (cur <= end) {
-        week.push(new Date(cur));
-        if (week.length === 7) { weeks.push(week); week = []; }
-        cur.setDate(cur.getDate() + 1);
+        const week = [];
+        for (let i = 0; i < 7; i++) {
+            week.push(new Date(cur));
+            cur.setDate(cur.getDate() + 1);
+        }
+        weeks.push(week);
     }
     return weeks;
 }
 
-function groupEvents(events, rangeStart, rangeEnd) {
+function buildThreeMonthView(anchorYear, anchorMonth) {
+    // Determine the three target months
+    const targetMonths = [];
+    for (let i = 0; i < 3; i++) {
+        const total = anchorMonth + i;
+        const m = ((total % 12) + 12) % 12;
+        const y = anchorYear + Math.floor(total / 12);
+        targetMonths.push({ year: y, month: m });
+    }
+
+    // Collect all unique weeks (dedup boundary weeks shared between adjacent months)
+    const allWeeks = [];
+    const seen = new Set();
+    for (const { year, month } of targetMonths) {
+        for (const week of buildWeeksForMonth(year, month)) {
+            const key = week[0].getTime();
+            if (!seen.has(key)) {
+                seen.add(key);
+                allWeeks.push(week);
+            }
+        }
+    }
+
+    // Owner of a week = target month with the most days in it
+    const targetKeys = new Set(targetMonths.map(m => `${m.year}-${m.month}`));
+    function ownerOf(week) {
+        const counts = {};
+        for (const d of week) {
+            const k = `${d.getFullYear()}-${d.getMonth()}`;
+            if (targetKeys.has(k)) counts[k] = (counts[k] || 0) + 1;
+        }
+        let best = null, bestCount = -1;
+        for (const k in counts) {
+            if (counts[k] > bestCount) { bestCount = counts[k]; best = k; }
+        }
+        return best;
+    }
+
+    // Group consecutive same-owner weeks into sections
+    const sections = [];
+    for (const week of allWeeks) {
+        const key = ownerOf(week);
+        const last = sections[sections.length - 1];
+        if (last && last.ownerKey === key) {
+            last.weeks.push(week);
+        } else {
+            const [y, m] = key.split("-").map(Number);
+            sections.push({ ownerKey: key, year: y, month: m, weeks: [week] });
+        }
+    }
+
+    const altMonth = targetMonths[1];
+    const gridStart = sections[0].weeks[0][0];
+    const gridEnd = sections[sections.length - 1].weeks.at(-1)[6];
+    return { sections, altMonth, gridStart, gridEnd };
+}
+
+// --- Event handling ---
+
+function groupEventsByDate(events, rangeStart, rangeEnd) {
     const byDate = {};
     for (const ev of events) {
         const s = parseISODate(ev.date);
@@ -313,75 +489,202 @@ function cleanTitle(title) {
 
 let allEvents = [];
 let viewYear, viewMonth;
+let currentView = "grid";
 
-function render(year, month) {
-    viewYear = year;
-    viewMonth = month;
-    document.getElementById("month-heading").textContent = `${MONTH_NAMES[month]} ${year}`;
+function setView(v) {
+    currentView = v;
+    localStorage.setItem(VIEW_KEY, v);
+    document.getElementById("view-grid-btn").classList.toggle("active", v === "grid");
+    document.getElementById("view-list-btn").classList.toggle("active", v === "list");
+    document.getElementById("grid-view").hidden = v !== "grid";
+    document.getElementById("list-view").hidden = v !== "list";
+    renderCurrent();
+}
 
-    const weeks = buildWeeks(year, month);
-    const rangeStart = weeks[0][0];
-    const rangeEnd   = weeks[weeks.length - 1][6];
-    const byDate = groupEvents(allEvents, rangeStart, rangeEnd);
-    const today = new Date();
-    const todayISO = fmtISO(today);
+function renderCurrent() {
+    if (currentView === "grid") renderGrid();
+    else renderList();
+}
 
-    const grid = document.getElementById("grid");
-    grid.textContent = "";
+function renderGrid() {
+    const { sections, altMonth, gridStart, gridEnd } = buildThreeMonthView(viewYear, viewMonth);
+    document.getElementById("anchor-label").textContent =
+        `${MONTH_NAMES[viewMonth]} ${viewYear}`;
 
-    for (const week of weeks) {
-        const row = document.createElement("div");
-        row.className = "cal-row";
-        for (const day of week) {
-            const cell = document.createElement("div");
-            cell.className = "cal-day";
-            if (fmtISO(day) === todayISO) cell.classList.add("cal-today");
-            const num = document.createElement("span");
-            num.className = "day-number";
-            num.textContent = day.getDate();
-            cell.appendChild(num);
-            const events = byDate[fmtISO(day)] || [];
-            for (const ev of events) {
-                const pill = document.createElement("div");
-                pill.className = "cal-event";
-                const color = eventColor(ev.title);
-                if (color) pill.classList.add(color);
-                const isStart = ev.date === fmtISO(day);
-                if (!isStart) pill.classList.add("cont");
-                let label = cleanTitle(ev.title);
-                if (isStart && ev.time) label = `${ev.time} ${label}`;
-                pill.textContent = label;
-                cell.appendChild(pill);
+    const byDate = groupEventsByDate(allEvents, gridStart, gridEnd);
+    const todayISO = fmtISO(new Date());
+
+    const container = document.getElementById("grid-sections");
+    container.textContent = "";
+
+    sections.forEach((section, idx) => {
+        const sec = document.createElement("div");
+        sec.className = "cal-month-section";
+        if (idx % 2 === 1) sec.classList.add("alt");
+
+        const label = document.createElement("div");
+        label.className = "cal-month-label";
+        label.textContent = `${MONTH_NAMES[section.month]} ${section.year}`;
+        sec.appendChild(label);
+
+        const weeksDiv = document.createElement("div");
+        weeksDiv.className = "cal-weeks";
+
+        for (const week of section.weeks) {
+            const row = document.createElement("div");
+            row.className = "cal-row";
+            for (const day of week) {
+                const cell = document.createElement("div");
+                cell.className = "cal-day";
+                if (day.getFullYear() === altMonth.year && day.getMonth() === altMonth.month) {
+                    cell.classList.add("cal-day-alt");
+                }
+                if (fmtISO(day) === todayISO) cell.classList.add("cal-today");
+
+                const num = document.createElement("span");
+                num.className = "day-number";
+                num.textContent = day.getDate();
+                cell.appendChild(num);
+
+                const events = byDate[fmtISO(day)] || [];
+                for (const ev of events) {
+                    const pill = document.createElement("div");
+                    pill.className = "cal-event";
+                    const color = eventColor(ev.title);
+                    if (color) pill.classList.add(color);
+                    const isStart = ev.date === fmtISO(day);
+                    if (!isStart) pill.classList.add("cont");
+                    let label = cleanTitle(ev.title);
+                    if (isStart && ev.time) label = `${ev.time} ${label}`;
+                    pill.textContent = label;
+                    cell.appendChild(pill);
+                }
+                row.appendChild(cell);
             }
-            row.appendChild(cell);
+            weeksDiv.appendChild(row);
         }
-        grid.appendChild(row);
+        sec.appendChild(weeksDiv);
+        container.appendChild(sec);
+    });
+}
+
+function renderList() {
+    const { gridStart, gridEnd } = buildThreeMonthView(viewYear, viewMonth);
+    document.getElementById("anchor-label").textContent =
+        `${MONTH_NAMES[viewMonth]} ${viewYear}`;
+
+    // Events that overlap the 3-month range
+    const inRange = allEvents.filter(ev => {
+        const s = parseISODate(ev.date);
+        const e = ev.end_date ? parseISODate(ev.end_date) : s;
+        return e >= gridStart && s <= gridEnd;
+    });
+
+    // Sort by start date, then time
+    inRange.sort((a, b) => {
+        if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+        const at = a.time || "", bt = b.time || "";
+        if (at && bt) return at < bt ? -1 : (at > bt ? 1 : 0);
+        if (at) return -1;
+        if (bt) return 1;
+        return 0;
+    });
+
+    // Group by start date
+    const byDate = {};
+    for (const ev of inRange) (byDate[ev.date] ||= []).push(ev);
+
+    const container = document.getElementById("list-items");
+    container.textContent = "";
+
+    const dates = Object.keys(byDate).sort();
+    if (dates.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "list-empty";
+        empty.textContent = "No events in this range.";
+        container.appendChild(empty);
+        return;
+    }
+
+    const todayISO = fmtISO(new Date());
+    for (const dateISO of dates) {
+        const d = parseISODate(dateISO);
+        const header = document.createElement("div");
+        header.className = "list-date-header";
+        let headerText = `${WEEKDAY_SHORT[d.getDay()]}, ${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`;
+        if (dateISO === todayISO) {
+            headerText += " · Today";
+            header.classList.add("today");
+        }
+        header.textContent = headerText;
+        container.appendChild(header);
+
+        for (const ev of byDate[dateISO]) {
+            const item = document.createElement("div");
+            item.className = "list-item";
+            const color = eventColor(ev.title);
+            if (color) item.classList.add(color);
+
+            const titleEl = document.createElement("div");
+            titleEl.className = "list-item-title";
+            let text = cleanTitle(ev.title);
+            if (ev.time) text = `${ev.time} — ${text}`;
+            titleEl.textContent = text;
+            item.appendChild(titleEl);
+
+            if (ev.end_date && ev.end_date !== ev.date) {
+                const range = document.createElement("div");
+                range.className = "list-item-range";
+                range.textContent = `Through ${ev.end_date}`;
+                item.appendChild(range);
+            }
+            if (ev.notes) {
+                const notes = document.createElement("div");
+                notes.className = "list-item-notes";
+                notes.textContent = ev.notes;
+                item.appendChild(notes);
+            }
+            container.appendChild(item);
+        }
     }
 }
+
+// --- Unlock flow ---
 
 function showCalendar(data) {
     allEvents = data.events;
     document.getElementById("generated").textContent = `Updated ${data.generated}`;
     document.getElementById("lock-screen").hidden = true;
     document.getElementById("calendar").hidden = false;
+
     const now = new Date();
-    render(now.getFullYear(), now.getMonth());
+    viewYear = now.getFullYear();
+    viewMonth = now.getMonth();
+
+    const savedView = localStorage.getItem(VIEW_KEY) || "grid";
+    setView(savedView);
 }
 
 async function tryUnlock(password, fromCache) {
+    const btn = document.getElementById("unlock-btn");
+    btn.disabled = true;
+    btn.textContent = "Unlocking…";
     try {
         const data = await decrypt(password);
-        localStorage.setItem(STORAGE_KEY, password);
+        localStorage.setItem(PW_KEY, password);
         showCalendar(data);
         return true;
     } catch (e) {
         if (fromCache) {
-            // Cached password didn't match this bundle — clear and re-prompt
-            localStorage.removeItem(STORAGE_KEY);
+            // Cached password no longer matches (password was changed) — re-prompt
+            localStorage.removeItem(PW_KEY);
         } else {
             document.getElementById("error-msg").textContent = "Incorrect password";
         }
         return false;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = "View Calendar";
     }
 }
 
@@ -394,18 +697,23 @@ document.getElementById("unlock-form").addEventListener("submit", async e => {
 document.getElementById("prev-btn").addEventListener("click", () => {
     let y = viewYear, m = viewMonth - 1;
     if (m < 0) { m = 11; y -= 1; }
-    render(y, m);
+    viewYear = y; viewMonth = m;
+    renderCurrent();
 });
 
 document.getElementById("next-btn").addEventListener("click", () => {
     let y = viewYear, m = viewMonth + 1;
     if (m > 11) { m = 0; y += 1; }
-    render(y, m);
+    viewYear = y; viewMonth = m;
+    renderCurrent();
 });
 
-// Auto-unlock with cached password if present
-const cached = localStorage.getItem(STORAGE_KEY);
-if (cached) tryUnlock(cached, true);
+document.getElementById("view-grid-btn").addEventListener("click", () => setView("grid"));
+document.getElementById("view-list-btn").addEventListener("click", () => setView("list"));
+
+// Auto-unlock with cached password on load
+const cachedPw = localStorage.getItem(PW_KEY);
+if (cachedPw) tryUnlock(cachedPw, true);
 </script>
 </body>
 </html>
